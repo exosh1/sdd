@@ -106,6 +106,12 @@ def main() -> int:
           "plugin homepage is a string (or absent)", "plugin.json `homepage` must be a string")
     check(auth is None or isinstance(auth, (str, dict)),
           "plugin author is a string or object (or absent)", "plugin.json `author` must be a string or object")
+    check(plugin.get("homepage") == "https://github.com/exosh1/sdd",
+          "Claude plugin homepage points to exosh1/sdd",
+          f"Claude plugin homepage must point to exosh1/sdd, got {plugin.get('homepage')!r}")
+    check(plugin.get("repository") == "https://github.com/exosh1/sdd.git",
+          "Claude plugin repository points to exosh1/sdd",
+          f"Claude plugin repository must point to exosh1/sdd, got {plugin.get('repository')!r}")
 
     # --- marketplace.json: agrees with plugin.json on name / version / description ---
     print("== marketplace ==")
@@ -140,6 +146,13 @@ def main() -> int:
         check(data.get("version") == version,
               f"{rel} version matches plugin.json ({version})",
               f"{rel} version {data.get('version')!r} != plugin.json {version!r}")
+        check(data.get("homepage") == "https://github.com/exosh1/sdd",
+              f"{rel} homepage points to exosh1/sdd",
+              f"{rel} homepage must point to exosh1/sdd, got {data.get('homepage')!r}")
+        if rel == ".codex-plugin/plugin.json":
+            check(data.get("repository") == "https://github.com/exosh1/sdd",
+                  f"{rel} repository points to exosh1/sdd",
+                  f"{rel} repository must point to exosh1/sdd, got {data.get('repository')!r}")
 
     copilot_plugin = load_tool_manifest("plugin.json")
     if copilot_plugin is not None:
@@ -152,6 +165,12 @@ def main() -> int:
         check(copilot_plugin.get("version") == version,
               f"plugin.json version matches Claude plugin.json ({version})",
               f"plugin.json version {copilot_plugin.get('version')!r} != Claude plugin.json {version!r}")
+        check(copilot_plugin.get("homepage") == "https://github.com/exosh1/sdd",
+              "Copilot plugin homepage points to exosh1/sdd",
+              f"Copilot plugin homepage must point to exosh1/sdd, got {copilot_plugin.get('homepage')!r}")
+        check(copilot_plugin.get("repository") == "https://github.com/exosh1/sdd",
+              "Copilot plugin repository points to exosh1/sdd",
+              f"Copilot plugin repository must point to exosh1/sdd, got {copilot_plugin.get('repository')!r}")
         copilot_agents = copilot_plugin.get("extensions", {}).get("com.github.copilot", {}).get("agents", [])
         agent_files = sorted((ROOT / "com.github.copilot" / "agents").glob("*.agent.md"))
         expected_agent_paths = [
@@ -204,11 +223,19 @@ def main() -> int:
               ".agents marketplace 'sdd' source is the git url form (root-local './' is uninstallable in codex)",
               f".agents marketplace 'sdd' source must be {{'source': 'url', 'url': 'https://github.com/…'}} — "
               f"codex silently skips a root-local './' plugin; got {cm_src!r}")
+        check(isinstance(cm_src, dict) and cm_src.get("url") == "https://github.com/exosh1/sdd",
+              ".agents marketplace source points to exosh1/sdd",
+              f".agents marketplace source must point to exosh1/sdd, got {cm_src!r}")
 
     installer = ROOT / "install.sh"
     check(installer.exists() and installer.read_text().startswith("#!/usr/bin/env bash"),
           "install.sh exists and is a bash script (#!/usr/bin/env bash)",
           "install.sh is missing or lacks the #!/usr/bin/env bash shebang")
+    installer_text = installer.read_text()
+    check('REPO="exosh1/sdd"' in installer_text
+          and "/plugin marketplace add exosh1/sdd" in installer_text,
+          "install.sh downloads and advertises exosh1/sdd",
+          "install.sh must download and advertise exosh1/sdd")
 
     VALID_MODELS = {"haiku", "sonnet", "opus", "fable", "inherit"}
     VALID_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
