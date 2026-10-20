@@ -118,9 +118,7 @@ def main() -> int:
         check(bool(entry.get("description")), "marketplace entry has a description", "marketplace 'sdd' entry has no description")
         check(bool(entry.get("source")), "marketplace entry has a source", "marketplace 'sdd' entry has no source")
 
-    # --- cross-tool manifests: the Codex + Cursor mirrors carry the same name + version ---
-    # v1.9.0 ships .codex-plugin/ + .agents/plugins/ (Codex CLI) and .cursor-plugin/ (Cursor);
-    # a version bump that misses one of them would silently publish a stale manifest.
+    # --- cross-tool manifests: Codex, Cursor, and Copilot mirrors carry the same version ---
     print("== cross-tool manifests ==")
 
     def load_tool_manifest(rel: str):
@@ -142,6 +140,50 @@ def main() -> int:
         check(data.get("version") == version,
               f"{rel} version matches plugin.json ({version})",
               f"{rel} version {data.get('version')!r} != plugin.json {version!r}")
+
+    copilot_plugin = load_tool_manifest("plugin.json")
+    if copilot_plugin is not None:
+        check(copilot_plugin.get("$schema") == "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+              "plugin.json declares Agent Plugins 1.0",
+              "plugin.json must declare the canonical Agent Plugins 1.0 schema")
+        check(copilot_plugin.get("name") == "sdd",
+              "plugin.json name is 'sdd'",
+              f"plugin.json name is {copilot_plugin.get('name')!r}, expected 'sdd'")
+        check(copilot_plugin.get("version") == version,
+              f"plugin.json version matches Claude plugin.json ({version})",
+              f"plugin.json version {copilot_plugin.get('version')!r} != Claude plugin.json {version!r}")
+        copilot_agents = copilot_plugin.get("extensions", {}).get("com.github.copilot", {}).get("agents", [])
+        agent_files = sorted((ROOT / "com.github.copilot" / "agents").glob("*.agent.md"))
+        expected_agent_paths = [
+            f"./com.github.copilot/agents/sdd-{agent.stem}.agent.md"
+            for agent in sorted((ROOT / "agents").glob("*.md"))
+        ]
+        check(copilot_agents == expected_agent_paths,
+              "plugin.json registers every generated Copilot agent",
+              "plugin.json Copilot agent paths must exactly match canonical agent prompts")
+        check(
+            all((ROOT / path.removeprefix("./")).is_file() for path in copilot_agents)
+            and len(agent_files) == len(expected_agent_paths),
+            "all registered Copilot agent files exist",
+            "plugin.json references missing generated agent files or the generated agent count is wrong",
+        )
+
+    copilot_market = load_tool_manifest(".github/plugin/marketplace.json")
+    if copilot_market is not None:
+        check(copilot_market.get("name") == "sdd",
+              "Copilot marketplace name is 'sdd'",
+              f"Copilot marketplace name is {copilot_market.get('name')!r}, expected 'sdd'")
+        copilot_entry = next((p for p in copilot_market.get("plugins", []) if p.get("name") == "sdd"), None)
+        check(copilot_entry is not None,
+              "Copilot marketplace lists the 'sdd' plugin",
+              "Copilot marketplace has no plugin named 'sdd'")
+        if copilot_entry is not None:
+            check(copilot_entry.get("version") == version,
+                  f"Copilot marketplace version matches plugin.json ({version})",
+                  f"Copilot marketplace version {copilot_entry.get('version')!r} != {version!r}")
+            check(copilot_entry.get("source") == ".",
+                  "Copilot marketplace source points to the repository root plugin",
+                  f"Copilot marketplace source must be '.', got {copilot_entry.get('source')!r}")
 
     codex_market = load_tool_manifest(".agents/plugins/marketplace.json")
     if codex_market is not None:
@@ -245,14 +287,14 @@ def main() -> int:
     skill_specs = sorted((ROOT / "skills").glob("*/SKILL.md"))
     doc_pool = skill_glob + sorted((ROOT / "agents").glob("*.md"))
 
-    # --- skill count in prose: README + the 4 manifests state the REAL skill count ---
+    # --- skill count in prose: README + plugin manifests state the REAL skill count ---
     # The "N atomic" phrase is marketing prose that silently rots when a skill is added;
     # every file that carries it must agree with the actual number of skills/*/SKILL.md.
     print("== skill count in prose ==")
     n_skills = len(skill_specs)
     ATOMIC_RE = re.compile(r"\b(\d+) atomic")
     for rel in ("README.md", ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json",
-                ".codex-plugin/plugin.json", ".cursor-plugin/plugin.json"):
+                ".codex-plugin/plugin.json", ".cursor-plugin/plugin.json", "plugin.json"):
         counts = ATOMIC_RE.findall((ROOT / rel).read_text())
         check(bool(counts) and all(int(c) == n_skills for c in counts),
               f"{rel} states the real skill count ({n_skills} atomic)",
@@ -298,7 +340,11 @@ def main() -> int:
     # that gap stays closed).
     print("== invocation form ==")
     SDD_HYPHEN = re.compile(r"(?<!proof)/sdd-")
-    form_files = link_files + [ROOT / ".claude-plugin" / "plugin.json", ROOT / ".claude-plugin" / "marketplace.json"]
+    form_files = link_files + [
+        ROOT / ".claude-plugin" / "plugin.json",
+        ROOT / ".claude-plugin" / "marketplace.json",
+        ROOT / ".github" / "plugin" / "marketplace.json",
+    ]
     offenders: list[str] = []
     for f in sorted(set(form_files)):
         for i, line in enumerate(f.read_text().splitlines(), 1):
@@ -342,7 +388,7 @@ def main() -> int:
               f"skill dir '{base}' must match ^[a-z0-9-]+$ — install.sh interpolates the dir name into a sed (BRE) pattern, so a dot/underscore/+ would break the rename pass")
 
     # --- cross-tool mechanism coverage: every Claude mechanism a spine uses is mapped ---
-    # tool-adapters.md is the single Codex/Cursor mapping table; a spine that starts using a
+    # tool-adapters.md is the single cross-tool mapping table; a spine that starts using a
     # new Claude-specific mechanism without a row there strands non-Claude users.
     print("== cross-tool mechanism coverage ==")
     adapters_text = (ROOT / "skills" / "_shared" / "tool-adapters.md").read_text()

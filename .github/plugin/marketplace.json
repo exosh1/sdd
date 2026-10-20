@@ -1,0 +1,19 @@
+{
+  "name": "sdd",
+  "owner": {
+    "name": "Kyrylo Genkov",
+    "email": "genkovi4@gmail.com"
+  },
+  "metadata": {
+    "description": "Spec-Driven Development skills and agents for GitHub Copilot",
+    "version": "2.4.1"
+  },
+  "plugins": [
+    {
+      "name": "sdd",
+      "description": "Spec-Driven Development pipeline with 23 skills and 10 custom agents.",
+      "version": "2.4.1",
+      "source": "."
+    }
+  ]
+}

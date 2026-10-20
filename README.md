@@ -1,6 +1,6 @@
-# SDD — Spec-Driven Development for Claude Code
+# SDD — Spec-Driven Development for Claude Code and other coding agents
 
-A self-contained Claude Code plugin that carries a feature from a one-line idea to
+A self-contained Spec-Driven Development plugin that carries a feature from a one-line idea to
 **reviewed, verified, shipped** code through **23 atomic, stack-agnostic skills** and a
 **TDD implementation engine** — with a living decomposition roadmap above the per-feature flow and a
 **design pipeline** (design-system · ux-flows · screens) for UI features.
@@ -8,9 +8,8 @@ A self-contained Claude Code plugin that carries a feature from a one-line idea 
 Every skill is Socratic (it walks decisions with you, it doesn't dump a wall of output),
 gated (a stage hard-refuses when its prerequisite artifact is missing), and stack-agnostic
 (no language, tracker, or test tool is hard-coded — the skills detect what your repo uses).
-The Q&A skills are **depth-tunable** (easy / medium / hard) and run on **any Claude plan or
-model tier** — no skill requires a specific one; judgment agents default to `opus` and degrade
-gracefully when it's unavailable (see [Levers](#levers)).
+The Q&A skills are **depth-tunable** (easy / medium / hard). Claude model tiers are optional and
+judgment agents degrade gracefully when unavailable (see [Levers](#levers)).
 
 ## The flow
 
@@ -50,7 +49,7 @@ flowchart LR
 **Claude Code** — native plugin:
 
 ```text
-/plugin marketplace add genkovich/sdd
+/plugin marketplace add exosh1/sdd
 /plugin install sdd@sdd
 ```
 
@@ -61,10 +60,10 @@ of the current directory; `--global` for `~`, `--prefix DIR` for an arbitrary di
 
 ```sh
 cd your-project
-curl -fsSL https://raw.githubusercontent.com/genkovich/sdd/main/install.sh | bash -s -- codex
+curl -fsSL https://raw.githubusercontent.com/exosh1/sdd/main/install.sh | bash -s -- codex
 ```
 
-Restart codex and type `$sdd-specify`. Alternative: `codex plugin marketplace add genkovich/sdd`,
+Restart codex and type `$sdd-specify`. Alternative: `codex plugin marketplace add exosh1/sdd`,
 then **inside codex** `/plugins` → the `sdd` tab → **Install plugin** — registers the
 **unprefixed** names (`$specify`) instead of the script's `$sdd-specify`. **Pick one path, not
 both** — running both shows every skill twice. Undo: `install.sh codex --uninstall` (script) or
@@ -76,11 +75,44 @@ dot-directories it writes are hidden by default in Explorer.
 
 ```sh
 cd your-project
-curl -fsSL https://raw.githubusercontent.com/genkovich/sdd/main/install.sh | bash -s -- cursor
+curl -fsSL https://raw.githubusercontent.com/exosh1/sdd/main/install.sh | bash -s -- cursor
 ```
 
-How every Claude-specific mechanism — `AskUserQuestion`, subagents, `/clear`, the implement
-engine modes — maps to Codex / Cursor is one table:
+**GitHub Copilot plugin** — the repository includes an
+[Agent Plugins 1.0](https://docs.github.com/en/copilot/concepts/agents/about-plugins) manifest and
+marketplace. Install directly from GitHub with Copilot CLI:
+
+```sh
+copilot plugin install exosh1/sdd
+```
+
+Or install from a local checkout:
+
+```sh
+copilot plugin install /path/to/sdd
+```
+
+To register the marketplace and install by its plugin name:
+
+```sh
+copilot plugin marketplace add exosh1/sdd
+copilot plugin install sdd@sdd
+```
+
+Copilot CLI also accepts a local marketplace directory or a remote Git URL. Update with
+`copilot plugin update sdd`. The GitHub Copilot app can browse and install plugins from
+**Customize → Plugins**.
+
+**IntelliJ IDEA note:** GitHub's current documentation describes plugin installation for Copilot
+CLI and the Copilot app, not from IntelliJ's GitHub Copilot settings. IntelliJ does support
+[repository skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) under
+`.github/skills` and [custom agents](https://docs.github.com/en/copilot/how-tos/copilot-in-your-ide/use-copilot-agents/use-custom-agents?tool=jetbrains)
+under `.github/agents`, but do not assume the plugin marketplace flow registers them in the IDE.
+If your Copilot version exposes a Plugins UI in IntelliJ, verify that it accepts Agent Plugins 1.0
+repositories; plugin manifests cannot run install hooks or copy project-local settings.
+
+How every Claude-specific mechanism — `AskUserQuestion`, subagents, `/clear`, and the implement
+engine modes — maps to Codex / Cursor / Copilot is documented in one table:
 [`skills/_shared/tool-adapters.md`](./skills/_shared/tool-adapters.md).
 
 ## First run
@@ -329,9 +361,11 @@ skipped.
 .claude-plugin/   plugin.json + marketplace.json (self-marketplace)
 .codex-plugin/    Codex CLI plugin manifest (+ .agents/plugins/marketplace.json — its self-marketplace)
 .cursor-plugin/   Cursor plugin manifest (skills/ + agents/ auto-discovered from the root)
+.github/plugin/   Copilot marketplace manifest; root plugin.json packages shared skills + Copilot agents
+com.github.copilot/agents/  Generated Copilot custom agents (source prompts stay in agents/)
 install.sh        Codex CLI / Cursor installer — copies the subtree, prefixes skill names, generates functional agents
 agents/           explorer, test-author, implementer, reviewer, critic, devils-advocate, researcher, strategist, analyst, pen-keeper
-scripts/          validate_plugin.py (CI gate: manifests + skill/agent frontmatter + the consistency invariants — links resolve, /sdd: form, handoff block, single-source taxonomy, no _shared orphans)
+scripts/          validate_plugin.py + generate_copilot_agents.py (manifests, generated-agent parity, skill/agent frontmatter, and consistency invariants)
 skills/_shared/   canonical agent-roster / artifact-language / ask-style / critic / diagram-presentation / handoff / interview-depth / mermaid-check / self-check / settings-file / size-matrix / socratic-loop / surfaces / tool-adapters (referenced, not duplicated)
 skills/<name>/    SKILL.md spine + references/ (heavy detail) + templates/ (output scaffolds)
 ```

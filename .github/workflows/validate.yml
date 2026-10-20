@@ -19,6 +19,9 @@ jobs:
       - name: Validate plugin (name / version / description + skill & agent frontmatter)
         run: python3 scripts/validate_plugin.py
 
+      - name: Verify generated Copilot plugin agents
+        run: python3 scripts/generate_copilot_agents.py --check
+
       - name: No references to excluded legacy dirs
         run: |
           if grep -REn '00-overview|document-templates|examples/|scripts/sdlc_lint|generate-gates' skills agents README.md 2>/dev/null; then
