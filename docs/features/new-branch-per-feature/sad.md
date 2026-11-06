@@ -144,44 +144,48 @@ Before any Git command in either flow, the shared gate validates the feature slu
 
 ```mermaid
 sequenceDiagram
-    actor User as Plugin user
-    participant Host as AI coding host
-    participant Gate as Shared branch gate
-    participant State as Local policy state
-    participant Repos as Selected Git repositories
-    User->>Host: Enable policy or resume pending setup
-    Host->>Gate: Begin or resume feature initialization
-    Gate->>Repos: Discover eligible independent checkouts if initial setup
-    Repos-->>Gate: Candidate repositories
-    Gate-->>User: Require explicit selection including the documents repository if initial setup
-    User->>Gate: Select repositories if initial setup
+    participant C as <client>
+    participant H as <service>
+    participant S as <service>
+    participant D as <data-store>
+    participant R as <data-store>
+    C->>H: Enable policy or resume pending setup
+    H->>S: Begin or resume feature initialization
+    S->>R: Discover eligible independent checkouts if initial setup
+    R-->>S: Candidate repositories
+    S-->>C: Require explicit selection including the documents repository if initial setup
+    C->>S: Select repositories if initial setup
     loop Initial setup or pending retry
-        Gate->>Repos: Preflight all selected repositories
-        Repos-->>Gate: Identity, branch, cleanliness, and permission results
+        S->>R: Preflight all selected repositories
+        R-->>S: Identity, branch, cleanliness, and permission results
         alt Any repository fails preflight
-            Gate-->>User: Report each selected repository's status and stop before setup writes
+            S-->>C: Report each selected repository's status and stop before setup writes
         else Every repository passes preflight
-            Gate->>Repos: Add or verify local exclude rule; assign or reuse checkout UUIDs
-            Repos-->>Gate: Local metadata write results
+            S->>R: Add or verify local exclude rule, assign or reuse checkout UUIDs
+            Note over S,R: persists local checkout metadata
+            R-->>S: Local metadata write results
             alt Any local metadata write fails
-                Gate-->>User: Report every selected repository's setup result; stop before saving policy or creating branches
+                S-->>C: Report every selected repository's setup result, stop before saving policy or creating branches
             else All local metadata writes succeed
-                Gate->>State: Atomically save or update policy as pending with selection and complete UUID map
+                S->>D: Atomically save or update policy as pending with selection and complete UUID map
+                Note over S,D: persists feature branch policy
                 alt Policy state write fails
-                    State-->>Gate: Error; prior valid state retained or absent on initial setup
-                    Gate-->>User: Report every repository and state-path result; stop before branch creation
+                    D-->>S: Error, prior valid state retained or absent on initial setup
+                    S-->>C: Report every repository and state-path result, stop before branch creation
                 else Policy state saved
-                    State-->>Gate: Pending policy state
+                    D-->>S: Pending policy state
                     alt Every target branch is already active
-                        Gate->>State: Mark setup active
-                        Gate-->>Host: Allow the feature stage to begin
+                        S->>D: Mark setup active
+                        Note over S,D: persists active setup status
+                        S-->>H: Allow the feature stage to begin
                     else One or more target branches are missing
-                        Gate->>Repos: Create missing slug branches from approved clean bases
-                        Repos-->>Gate: Per-repository branch setup results
+                        S->>R: Create missing slug branches from approved clean bases
+                        Note over S,R: persists feature-slug branches
+                        R-->>S: Per-repository branch setup results
                         alt Any branch setup operation fails
-                            Gate-->>User: Report all repository states; preserve completed changes and pending state
+                            S-->>C: Report all repository states, preserve completed changes and pending state
                         else Missing branches created
-                            Gate-->>User: Require manual activation; keep setup pending and stop feature work
+                            S-->>C: Require manual activation, keep setup pending and stop feature work
                         end
                     end
                 end
@@ -196,39 +200,62 @@ The documents repository is mandatory in the selected set because it anchors the
 
 ```mermaid
 sequenceDiagram
-    actor User as Plugin user
-    participant Host as AI coding host
-    participant Gate as Shared branch gate
-    participant State as Local policy state
-    participant Repos as Selected Git repositories
-    User->>Host: Start an SDD skill for a feature
-    Host->>Gate: Run the mandatory branch preflight
-    Gate->>State: Resolve feature policy, setup status, and repository selection
-    State-->>Gate: Active feature, setup status, and selected identities
+    participant C as <client>
+    participant H as <service>
+    participant S as <service>
+    participant D as <data-store>
+    participant R as <data-store>
+    C->>H: Start an SDD skill for a feature
+    H->>S: Run the mandatory branch preflight
+    S->>D: Resolve feature policy, setup status, and repository selection
+    D-->>S: Active feature, setup status, and selected identities
     alt Setup status is pending
-        Gate-->>Host: Route to Flow 1 setup-resume preflight; do not start feature work
+        S-->>H: Route to Flow 1 setup-resume preflight, do not start feature work
     else Setup status is active
         loop Every selected repository
-            Gate->>Repos: Verify identity and active branch
-            Repos-->>Gate: Repository-specific result
+            S->>R: Verify identity and active branch
+            R-->>S: Repository-specific result
         end
         alt Any repository is missing, unverifiable, or on another branch
-            Gate-->>User: Report the mismatch and block all stage writes and commits
+            S-->>C: Report the mismatch and block all stage writes and commits
         else Every selected repository is on the exact feature branch
-            Gate-->>Host: Allow stage work
-            Host->>Gate: Recheck before any stage write, feature write, or feature commit
-            Gate->>Repos: Verify all selected branches again
-            Repos-->>Gate: Latest repository states
+            S-->>H: Allow stage work
+            H->>S: Recheck before any stage write, feature write, or feature commit
+            S->>R: Verify all selected branches again
+            R-->>S: Latest repository states
             alt All branches still match
-                Gate-->>Host: Allow the requested write or commit
+                S-->>H: Allow the requested write or commit
             else Any branch no longer matches
-                Gate-->>User: Block the write or commit and explain recovery
+                S-->>C: Block the write or commit and explain recovery
             end
         end
     end
 ```
 
 The entry gate runs before any SDD stage write, including policy-state initialization, settings creation, and task or roadmap status updates; it is repeated before feature writes and commits. Initialization uses the Flow 1 setup preflight until setup is `active`; Flow 2's exact-branch gate applies only afterward. Read-only inspection and explicit recovery actions remain available after a block. A dirty worktree is accepted only when the exact feature-slug branch is already active.
+
+### Resolve project-wide feature
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as <client>
+    participant S as <service>
+    participant D as <data-store>
+
+    Note over C,S: Precondition: invocation omits feature slug while branch policies are in use
+    C->>S: Start project-wide SDD skill
+    S->>D: Read explicitly active feature selection
+    D-->>S: Active feature selection
+    alt Exactly one feature is explicitly active
+        S-->>C: Continue using the active feature
+    else No feature is explicitly active
+        S-->>C: Request an explicit feature slug, block feature writes and commits
+    else Multiple features are explicitly active
+        S-->>C: Request an explicit feature slug, block feature writes and commits
+    end
+    Note over C,S: Postcondition: feature work proceeds only with one resolved feature, ambiguity permits read-only inspection and recovery
+```
 
 ## 7. Deployment view
 
