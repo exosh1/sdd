@@ -1,0 +1,137 @@
+{
+  "slug": "new-branch-per-feature",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Define local policy state and active-feature resolution",
+      "layer": "app",
+      "deps": [],
+      "acs": ["AC-07", "AC-11"],
+      "dod": "The shared policy contract resolves one explicitly active feature, blocks ambiguous project-wide writes, and preserves legacy behavior without opt-in.",
+      "files_hint": ["skills/_shared/branch-policy.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T1-define-local-policy-state.md",
+      "status": "todo"
+    },
+    {
+      "id": "T2",
+      "title": "Discover and explicitly select eligible repositories",
+      "layer": "app",
+      "deps": ["T1"],
+      "acs": ["AC-02", "AC-08"],
+      "dod": "Discovery excludes ineligible checkouts, selection is explicit with the documents repository mandatory, and invalid saved paths require reselection.",
+      "files_hint": ["skills/_shared/branch-policy.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T2-select-repositories.md",
+      "status": "todo"
+    },
+    {
+      "id": "T3",
+      "title": "Enforce safe branch-setup preflight",
+      "layer": "app",
+      "deps": ["T2"],
+      "acs": ["AC-03", "AC-12"],
+      "dod": "Setup blocks dirty or unapproved branch bases and inactive target-branch collisions without switching or modifying user work.",
+      "files_hint": ["skills/_shared/branch-policy.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T3-safe-branch-preflight.md",
+      "status": "todo"
+    },
+    {
+      "id": "T4",
+      "title": "Record checkout identity and verify local write access",
+      "layer": "app",
+      "deps": ["T3"],
+      "acs": ["AC-04"],
+      "dod": "Required local metadata permissions and checkout UUID identity are verified and failures stop before feature artifacts.",
+      "files_hint": ["skills/_shared/branch-policy.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T4-checkout-identity-permissions.md",
+      "status": "todo"
+    },
+    {
+      "id": "T5",
+      "title": "Create feature branches and resume pending setup",
+      "layer": "app",
+      "deps": ["T4"],
+      "acs": ["AC-01", "AC-09"],
+      "dod": "Missing slug branches are created without checkout; pending state resumes safely and becomes active only after manual activation and full verification.",
+      "files_hint": ["skills/_shared/branch-policy.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T5-create-and-resume-branches.md",
+      "status": "todo"
+    },
+    {
+      "id": "T6",
+      "title": "Enforce the shared branch gate at every write boundary",
+      "layer": "app",
+      "deps": ["T1", "T5"],
+      "acs": ["AC-05", "AC-06", "AC-10"],
+      "dod": "The shared gate checks all selected repositories before stage writes and rechecks before feature writes and commits without relying on host hooks.",
+      "files_hint": ["skills/_shared/branch-policy.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T6-enforce-shared-branch-gate.md",
+      "status": "todo"
+    },
+    {
+      "id": "T7",
+      "title": "Wire the first 12 registered skills to the branch gate",
+      "layer": "wiring",
+      "deps": ["T6"],
+      "acs": ["AC-05", "AC-06", "AC-10"],
+      "dod": "The api, clarify, classify-size, config, data-model, decide-adr, design, design-system, fix, glossary, implement, and interview entrypoints use the shared gate.",
+      "files_hint": ["skills/api/SKILL.md", "skills/clarify/SKILL.md", "skills/classify-size/SKILL.md", "skills/config/SKILL.md", "skills/data-model/SKILL.md", "skills/decide-adr/SKILL.md", "skills/design/SKILL.md", "skills/design-system/SKILL.md", "skills/fix/SKILL.md", "skills/glossary/SKILL.md", "skills/implement/SKILL.md", "skills/interview/SKILL.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T7-wire-first-skill-group.md",
+      "status": "todo"
+    },
+    {
+      "id": "T8",
+      "title": "Wire the remaining 11 registered skills to the branch gate",
+      "layer": "wiring",
+      "deps": ["T6"],
+      "acs": ["AC-05", "AC-06", "AC-10"],
+      "dod": "The plan-tests, review, roadmap, scaffold, screens, sequences, ship, specify, survey, tasks, and ux-flows entrypoints use the shared gate.",
+      "files_hint": ["skills/plan-tests/SKILL.md", "skills/review/SKILL.md", "skills/roadmap/SKILL.md", "skills/scaffold/SKILL.md", "skills/screens/SKILL.md", "skills/sequences/SKILL.md", "skills/ship/SKILL.md", "skills/specify/SKILL.md", "skills/survey/SKILL.md", "skills/tasks/SKILL.md", "skills/ux-flows/SKILL.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T8-wire-remaining-skill-group.md",
+      "status": "todo"
+    },
+    {
+      "id": "T9",
+      "title": "Validate branch-gate coverage in CI",
+      "layer": "tests",
+      "deps": ["T7", "T8"],
+      "acs": ["AC-10"],
+      "dod": "The existing validator dynamically checks every registered skill entrypoint for the canonical branch-gate invocation and fails with the missing path.",
+      "files_hint": ["scripts/validate_plugin.py"],
+      "file": "docs/features/new-branch-per-feature/tasks/T9-validate-skill-gate-coverage.md",
+      "status": "todo"
+    },
+    {
+      "id": "T10",
+      "title": "Document host-hook information as non-enforcing",
+      "layer": "docs",
+      "deps": ["T6"],
+      "acs": ["AC-10"],
+      "dod": "README and host-adapter guidance describe host hooks as informational and name the shared skill gate as the only required check.",
+      "files_hint": ["README.md", "skills/_shared/tool-adapters.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T10-document-host-hook-limitations.md",
+      "status": "todo"
+    },
+    {
+      "id": "T11",
+      "title": "Add safe-setup acceptance scenarios",
+      "layer": "tests",
+      "deps": ["T5"],
+      "acs": ["AC-03", "AC-04", "AC-08", "AC-09", "AC-12"],
+      "dod": "The host-driven setup matrix asserts unsafe states block, reports each repository, and preserves existing work and branches.",
+      "files_hint": ["evals/interactive/branch-policy-setup.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T11-safe-setup-acceptance-matrix.md",
+      "status": "todo"
+    },
+    {
+      "id": "T12",
+      "title": "Add active-gate and performance evaluation scenarios",
+      "layer": "tests",
+      "deps": ["T6", "T9", "T10", "T11"],
+      "acs": ["AC-05", "AC-06", "AC-07", "AC-10", "AC-11"],
+      "dod": "The host-driven gate matrix verifies active and ambiguous feature behavior, cross-repository blocking, legacy compatibility, hook independence, and the specified local preflight benchmark.",
+      "files_hint": ["evals/interactive/branch-policy-gate.md"],
+      "file": "docs/features/new-branch-per-feature/tasks/T12-active-gate-acceptance-matrix.md",
+      "status": "todo"
+    }
+  ]
+}
