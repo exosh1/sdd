@@ -2,7 +2,7 @@
 status: Draft
 owner: "Plugin user"
 reviewers: ["Tech Lead", "Security Lead"]
-updated_at: "2026-10-23"
+updated_at: "2026-11-06"
 feature_size: "M"
 ---
 
@@ -17,9 +17,9 @@ SDD plugin users need each feature's planning and implementation work isolated f
 
 This gap matters in projects whose modules are separate Git repositories: a feature can otherwise leave its documents or code on a default or unrelated branch in one of those repositories. Project-wide SDD skills also need a way to identify which feature's branch policy they must enforce.
 
-The chosen direction is an opt-in `new_branch_per_feature` policy that is saved per feature, selects eligible repositories explicitly, and applies one shared branch check to every SDD skill. Use host-level enforcement where available in addition to the shared check; a missing or inactive host hook must not bypass the skill-level gate.
+The chosen direction is an opt-in `new_branch_per_feature` policy that is saved per feature in local project state independent of the currently checked-out branch, selects eligible repositories explicitly, and applies one shared branch check to every SDD skill. The shared gate must be able to read that state before feature work on any branch. Use host-level enforcement where available in addition to the shared check; a missing or inactive host hook must not bypass the skill-level gate.
 
-Owner-confirmed constraints: the active branch name is exactly the feature slug, without a prefix. Branch setup is allowed from a clean current branch matching `main*`, `master*`, `develop*`, or `release*` first, or otherwise from the repository's reported default branch. Unsafe state, a non-active existing target branch, or a branch mismatch stops the stage without automatic switching, stashing, resetting, or deleting. A dirty tree is allowed after the target branch is already active. Discovery stays within the project workspace unless the owner explicitly selects another path. The read-only branch discovery/check operation uses the low-cost search/read model; other stage and judgment models remain unchanged.
+Owner-confirmed constraints: the active branch name is exactly the feature slug, without a prefix. Branch setup is local to each checkout; the policy does not inspect or change remote branches or permissions. Branch setup is allowed only from a clean current branch whose name begins with the case-sensitive literal prefix `main`, `master`, `develop`, or `release`, or whose name exactly matches the default branch recorded in that checkout. The feature branch is created from that current branch; being on another branch does not authorize creating it from the default branch. Unsafe state, a non-active existing local target branch, or a branch mismatch stops the stage without automatic switching, stashing, resetting, or deleting. A dirty tree is allowed after the target branch is already active. Discovery stays within the project workspace unless the owner explicitly selects another path. The read-only branch discovery/check operation uses the low-cost search/read model; other stage and judgment models remain unchanged.
 
 ## 2. Goals
 
@@ -72,43 +72,43 @@ Owner-confirmed constraints: the active branch name is exactly the feature slug,
 
 **Given** a Plugin user starts a feature with `new_branch_per_feature` and completes repository selection
 **When** the first feature stage initializes the policy
-**Then** each selected repository is on a branch named exactly for the feature slug, the selection is saved for later stages, and unselected repositories are unchanged
+**Then** each selected repository is on a branch named exactly for the feature slug, the policy and selection are saved in local project state that remains readable from any branch, and unselected repositories are unchanged
 
 ### AC-02 (US-02) — happy
 
 **Given** a Plugin user enables the policy in a project workspace
-**When** the plugin presents independent Git repositories found within that workspace or explicitly provided by the user
-**Then** the user can explicitly choose repositories using checkboxes or a numbered text fallback, and no repository is chosen implicitly
+**When** the plugin recursively discovers independent Git checkouts within that workspace or validates paths explicitly provided by the user
+**Then** it excludes submodules and linked worktrees from eligible repositories, and the user can explicitly choose repositories using checkboxes or a numbered text fallback; the repository containing the feature's SDD documents is mandatory, and no other repository is chosen implicitly
 
 ### AC-03 (US-03) — error
 
-**Given** branch setup is needed and a selected repository has uncommitted changes, its current branch is neither an allowed base nor the repository's reported default, or the feature branch already exists but is not active
+**Given** branch setup is needed and a selected repository has any of these unsafe states: tracked changes (staged or unstaged), untracked non-ignored files, a current branch that is neither an allowed base nor the locally recorded default branch, or an existing feature branch that is not active
 **When** the user starts an SDD stage
 **Then** the stage stops before feature work, reports the affected repository and reason, and does not automatically switch to an existing branch, stash, reset, or remove work
 
 ### AC-04 (US-03) — authorization
 
-**Given** the Plugin user lacks permission to create the requested branch in a selected repository
+**Given** the Plugin user lacks local write permission to create the requested branch in a selected repository
 **When** the plugin initializes or resumes the feature policy
 **Then** it stops before writing feature artifacts, reports the result for every selected repository, and preserves any branches already created
 
 ### AC-05 (US-04) — domain invariant
 
 **Given** a feature has an active branch policy
-**When** any SDD skill starts and a selected repository's active branch does not exactly match the feature slug
-**Then** the skill blocks its work and reports the mismatch before it writes or commits feature changes
+**When** any SDD skill starts, or is about to write or commit feature changes, and a selected repository's active branch does not exactly match the feature slug
+**Then** the skill blocks feature writes and commits from that point onward and reports the mismatch before the affected write or commit; read-only work and explicit recovery actions remain available
 
 ### AC-06 (US-04) — cross-context
 
 **Given** a feature spans multiple selected repositories
-**When** any one repository fails the branch check at the start of an SDD skill
-**Then** the entire skill stage is blocked, even if the repository from which it was launched has the correct branch
+**When** any one repository fails a branch check at the start of an SDD skill or before a feature write or commit
+**Then** feature writes and commits for the stage are blocked, even if the repository from which it was launched has the correct branch
 
 ### AC-07 (US-05) — error
 
-**Given** a project-wide SDD skill is invoked without a feature slug while branch policies are in use
-**When** exactly one active feature policy exists, or a single feature cannot be determined
-**Then** the skill uses that feature or requests an explicit feature slug, respectively, and does not proceed while the feature remains ambiguous
+**Given** an SDD skill is invoked without a feature slug while branch policies are in use (a project-wide invocation)
+**When** local project state marks exactly one feature as active, or marks none or multiple features as active
+**Then** the skill uses the one explicitly active feature or requests an explicit feature slug, respectively, and does not proceed with feature writes or commits while the feature remains ambiguous. An active feature is one explicitly selected as active in local project state; it remains active until the user changes that selection
 
 ### AC-08 (US-02) — error
 
@@ -120,13 +120,13 @@ Owner-confirmed constraints: the active branch name is exactly the feature slug,
 
 **Given** all selected repositories pass setup preflight but branch creation fails partway through
 **When** the plugin reports the failure
-**Then** it lists the state of each selected repository, leaves already-created branches intact, and performs no feature-stage work; a later run may continue only after its preflight passes
+**Then** it lists the state of each selected repository, leaves already-created branches intact, and performs no feature-stage work; a later run may continue only after every selected repository passes preflight. If a previously created feature branch is not active, the user must activate it manually before retrying; the plugin never resumes by switching branches
 
 ### AC-10 (US-04) — happy
 
-**Given** the current host does not provide an active blocking hook
+**Given** the current host does not provide an active blocking hook scoped to SDD-skill actions while this feature policy applies
 **When** a feature-scoped SDD skill starts
-**Then** the shared branch gate still verifies the saved policy and blocks mismatches before stage work, and the host-specific instructions explain hook availability, trust, and fallback behavior
+**Then** the shared branch gate still verifies the saved policy and blocks feature writes and commits on mismatches, while read-only work and explicit recovery actions remain available; host hooks enforce only SDD-skill actions while the policy applies, and the host-specific instructions explain hook availability, trust, and fallback behavior
 
 ### AC-11 (US-01) — happy
 
@@ -138,7 +138,7 @@ Owner-confirmed constraints: the active branch name is exactly the feature slug,
 
 **Given** a selected repository needs a new feature branch
 **When** the plugin checks the current branch as the base
-**Then** it accepts a branch matching `main*`, `master*`, `develop*`, or `release*` first, otherwise accepts only the repository's reported default branch, and stops if neither condition holds
+**Then** it accepts a current branch whose name begins with the case-sensitive literal prefix `main`, `master`, `develop`, or `release`; otherwise it accepts only an exact match for the default branch recorded in that checkout, and stops if neither condition holds
 
 ## 6. Non-functional requirements
 
@@ -154,7 +154,7 @@ If repository discovery needs an agent, it uses the existing Haiku search/read r
 
 - **Data classification:** Internal — repository locations and branch names are project metadata and remain in the local workspace.
 - **Personal data touched:** None.
-- **AuthZ/AuthN impact:** No new identity or permission system; branch creation uses the invoking user's existing repository permissions and fails visibly when denied.
+- **AuthZ/AuthN impact:** No new identity or permission system; local branch creation uses the invoking user's local filesystem permissions and fails visibly when denied. Remote branch state and permissions are not checked.
 - **Abuse cases:**
   - An invalid or replaced repository path: reject it and ask the owner to reselect rather than fall back to a parent or similarly named repository.
   - A path or slug that could be interpreted as a command or escape the intended workspace: validate it as data and reject it before any Git operation.
@@ -171,4 +171,4 @@ If repository discovery needs an agent, it uses the existing Haiku search/read r
 ## 8. Open questions
 
 - [ ] Which repository identity should confirm that a saved target path still points to the same checkout after it moves? Default now: stop and require reselection; never trust a name alone. — owner: Tech Lead, due: before sdd:design
-- [ ] Which host hook configuration can safely block tool execution on each supported host? Default now: use host-level enforcement where it can block reliably; the shared gate remains mandatory. — owner: Tech Lead, due: before sdd:design
+- [ ] Which hook configuration can block only SDD-skill actions while this feature policy applies on each supported host? Default now: use host-level enforcement where it can block reliably; the shared gate remains mandatory. — owner: Tech Lead, due: before sdd:design
